@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import http from 'http';
 import crypto from 'crypto';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,11 +13,42 @@ import {
   transliterateVariants,
   transliterateWords,
   matchThai,
+  containsThai,
 } from 'thai-transliterate';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.join(__dirname, '..');
 
 const PORT = process.argv[2] ? parseInt(process.argv[2]) : 3000;
+
+/** Read version info for both libraries (cached after first call) */
+let versionInfo;
+function getVersionInfo() {
+  if (versionInfo) return versionInfo;
+
+  const mcpPkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+
+  let libVersion = 'unknown';
+  const libPkgPath = path.join(rootDir, 'node_modules', 'thai-transliterate', 'package.json');
+  try { libVersion = JSON.parse(fs.readFileSync(libPkgPath, 'utf8')).version; } catch {}
+
+  let libCommit = 'unknown';
+  try {
+    const lockfile = JSON.parse(fs.readFileSync(path.join(rootDir, 'package-lock.json'), 'utf8'));
+    const resolved = lockfile.packages?.['node_modules/thai-transliterate']?.resolved || '';
+    const match = resolved.match(/#([0-9a-f]+)$/);
+    if (match) libCommit = match[1].slice(0, 7);
+  } catch {}
+
+  let mcpCommit = 'unknown';
+  try { mcpCommit = execSync('git rev-parse --short HEAD', { cwd: rootDir, encoding: 'utf8' }).trim(); } catch {}
+
+  versionInfo = {
+    mcp: { version: mcpPkg.version, commit: mcpCommit },
+    lib: { version: libVersion, commit: libCommit },
+  };
+  return versionInfo;
+}
 
 // Active sessions: sessionId -> { server, transport, createdAt }
 const sessions = new Map();
@@ -92,6 +124,13 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // Version info
+  if (pathname === '/api/version' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(getVersionInfo()));
+    return;
+  }
+
   // REST API endpoint for the web UI
   if (pathname === '/api/transliterate' && req.method === 'POST') {
     let body = '';
@@ -102,6 +141,11 @@ const httpServer = http.createServer(async (req, res) => {
         if (!thai) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Missing "thai" field' }));
+          return;
+        }
+        if (!containsThai(thai)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Input does not contain Thai text' }));
           return;
         }
         const result = {

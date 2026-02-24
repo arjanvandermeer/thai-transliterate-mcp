@@ -148,12 +148,22 @@
   </div>
 
   <footer>
-    <a href="https://github.com/arjanvandermeer/thai-transliterate-mcp">thai-transliterate-mcp</a>
+    <a href="https://github.com/arjanvandermeer/thai-transliterate-mcp">thai-transliterate-mcp</a> <span id="ver-mcp"></span>
     &middot;
-    <a href="https://github.com/arjanvandermeer/thai-transliterate-js">thai-transliterate</a>
+    <a href="https://github.com/arjanvandermeer/thai-transliterate-js">thai-transliterate</a> <span id="ver-lib"></span>
   </footer>
 
   <script>
+    // Load version info into footer
+    fetch('/api/version')
+      .then(r => r.json())
+      .then(v => {
+        const fmt = (p) => `v${p.version} (${p.commit})`;
+        document.getElementById('ver-mcp').textContent = fmt(v.mcp);
+        document.getElementById('ver-lib').textContent = fmt(v.lib);
+      })
+      .catch(() => {});
+
     const thaiInput = document.getElementById('thai-input');
     const matchInput = document.getElementById('match-input');
     const resultText = document.getElementById('result-text');
@@ -184,6 +194,14 @@
         matchResult.textContent = '';
         lastThai = '';
         lastVariants = null;
+        return;
+      }
+
+      // Only call the API if the input contains Thai characters
+      if (!/[\u0E01-\u0E5B]/.test(thai)) {
+        resultText.innerHTML = '<span class="empty">No Thai text detected</span>';
+        variantsList.innerHTML = '';
+        matchResult.textContent = '';
         return;
       }
 

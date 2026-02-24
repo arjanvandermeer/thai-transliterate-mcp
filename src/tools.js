@@ -4,6 +4,7 @@ import {
   transliterateVariants,
   transliterateWords,
   matchThai,
+  containsThai,
 } from 'thai-transliterate';
 
 /**
@@ -17,9 +18,12 @@ export function registerTools(server) {
     {
       thai: z.string().describe('Thai text to transliterate'),
     },
-    async ({ thai }) => ({
-      content: [{ type: 'text', text: transliterate(thai) }],
-    })
+    async ({ thai }) => {
+      if (!containsThai(thai)) {
+        return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: transliterate(thai) }] };
+    }
   );
 
   server.tool(
@@ -33,9 +37,12 @@ export function registerTools(server) {
         .default(10)
         .describe('Maximum number of variants to return (default: 10)'),
     },
-    async ({ thai, maxVariants }) => ({
-      content: [{ type: 'text', text: JSON.stringify(transliterateVariants(thai, { maxVariants }), null, 2) }],
-    })
+    async ({ thai, maxVariants }) => {
+      if (!containsThai(thai)) {
+        return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(transliterateVariants(thai, { maxVariants }), null, 2) }] };
+    }
   );
 
   server.tool(
@@ -50,6 +57,9 @@ export function registerTools(server) {
         .describe('Maximum edit distance to accept (default: unlimited)'),
     },
     async ({ thai, target, maxDistance }) => {
+      if (!containsThai(thai)) {
+        return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
+      }
       const opts = {};
       if (maxDistance !== undefined) opts.maxDistance = maxDistance;
       const result = matchThai(thai, target, opts);
@@ -71,8 +81,11 @@ export function registerTools(server) {
         .default(10)
         .describe('Maximum variants per word (default: 10)'),
     },
-    async ({ thai, maxVariants }) => ({
-      content: [{ type: 'text', text: JSON.stringify(transliterateWords(thai, { maxVariants }), null, 2) }],
-    })
+    async ({ thai, maxVariants }) => {
+      if (!containsThai(thai)) {
+        return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(transliterateWords(thai, { maxVariants }), null, 2) }] };
+    }
   );
 }
