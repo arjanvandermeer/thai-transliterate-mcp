@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
+    "start:http": "node src/index-http.js",
     "lint": "eslint src/"
   },
   "keywords": [
@@ -24,7 +25,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "thai-transliterate": "file:../thai-transliterate",
+    "thai-transliterate": "github:arjanvandermeer/thai-transliterate-js",
     "zod": "^3.24.0"
   }
 }
