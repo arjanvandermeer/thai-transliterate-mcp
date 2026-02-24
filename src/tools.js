@@ -10,8 +10,12 @@ import {
 /**
  * Register all transliteration tools on an McpServer instance.
  * @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server
+ * @param {{ logRequest?: Function, version?: object }} [opts]
  */
-export function registerTools(server) {
+export function registerTools(server, opts = {}) {
+  const log = opts.logRequest || (() => {});
+  const version = opts.version || {};
+
   server.tool(
     'transliterate',
     'Transliterate Thai text to the single most likely Roman/Latin spelling',
@@ -19,10 +23,13 @@ export function registerTools(server) {
       thai: z.string().describe('Thai text to transliterate'),
     },
     async ({ thai }) => {
+      const startMs = Date.now();
       if (!containsThai(thai)) {
         return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
       }
-      return { content: [{ type: 'text', text: transliterate(thai) }] };
+      const text = transliterate(thai);
+      log({ source: 'mcp', tool: 'transliterate', input: { thai }, response: { text }, latencyMs: Date.now() - startMs, version });
+      return { content: [{ type: 'text', text }] };
     }
   );
 
@@ -38,10 +45,13 @@ export function registerTools(server) {
         .describe('Maximum number of variants to return (default: 10)'),
     },
     async ({ thai, maxVariants }) => {
+      const startMs = Date.now();
       if (!containsThai(thai)) {
         return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
       }
-      return { content: [{ type: 'text', text: JSON.stringify(transliterateVariants(thai, { maxVariants }), null, 2) }] };
+      const variants = transliterateVariants(thai, { maxVariants });
+      log({ source: 'mcp', tool: 'transliterate_variants', input: { thai, maxVariants }, response: { text: variants[0]?.text, variantCount: variants.length }, latencyMs: Date.now() - startMs, version });
+      return { content: [{ type: 'text', text: JSON.stringify(variants, null, 2) }] };
     }
   );
 
@@ -57,12 +67,14 @@ export function registerTools(server) {
         .describe('Maximum edit distance to accept (default: unlimited)'),
     },
     async ({ thai, target, maxDistance }) => {
+      const startMs = Date.now();
       if (!containsThai(thai)) {
         return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
       }
-      const opts = {};
-      if (maxDistance !== undefined) opts.maxDistance = maxDistance;
-      const result = matchThai(thai, target, opts);
+      const opts2 = {};
+      if (maxDistance !== undefined) opts2.maxDistance = maxDistance;
+      const result = matchThai(thai, target, opts2);
+      log({ source: 'mcp', tool: 'match_thai', input: { thai, target, maxDistance }, response: result ? { variant: result.variant, distance: result.distance } : { match: false }, latencyMs: Date.now() - startMs, version });
       if (!result) {
         return { content: [{ type: 'text', text: 'No match found' }] };
       }
@@ -82,10 +94,13 @@ export function registerTools(server) {
         .describe('Maximum variants per word (default: 10)'),
     },
     async ({ thai, maxVariants }) => {
+      const startMs = Date.now();
       if (!containsThai(thai)) {
         return { content: [{ type: 'text', text: 'Input does not contain Thai text' }], isError: true };
       }
-      return { content: [{ type: 'text', text: JSON.stringify(transliterateWords(thai, { maxVariants }), null, 2) }] };
+      const words = transliterateWords(thai, { maxVariants });
+      log({ source: 'mcp', tool: 'transliterate_words', input: { thai, maxVariants }, response: { wordCount: words.length }, latencyMs: Date.now() - startMs, version });
+      return { content: [{ type: 'text', text: JSON.stringify(words, null, 2) }] };
     }
   );
 }

@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { registerTools } from './tools.js';
+import { logRequest } from './logger.js';
 import {
   transliterate,
   transliterateVariants,
@@ -40,8 +41,10 @@ function getVersionInfo() {
     if (match) libCommit = match[1].slice(0, 7);
   } catch {}
 
-  let mcpCommit = 'unknown';
-  try { mcpCommit = execSync('git rev-parse --short HEAD', { cwd: rootDir, encoding: 'utf8' }).trim(); } catch {}
+  let mcpCommit = process.env.GIT_COMMIT_SHORT || 'unknown';
+  if (mcpCommit === 'unknown') {
+    try { mcpCommit = execSync('git rev-parse --short HEAD', { cwd: rootDir, encoding: 'utf8' }).trim(); } catch {}
+  }
 
   versionInfo = {
     mcp: { version: mcpPkg.version, commit: mcpCommit },
@@ -55,11 +58,12 @@ const sessions = new Map();
 
 /** Create a new McpServer instance with all tools registered */
 function createServer() {
+  const vi = getVersionInfo();
   const server = new McpServer({
     name: 'thai-transliterate-mcp',
-    version: '0.1.0',
+    version: vi.mcp.version,
   });
-  registerTools(server);
+  registerTools(server, { logRequest, version: vi });
   return server;
 }
 
@@ -80,11 +84,14 @@ const httpServer = http.createServer(async (req, res) => {
 
   // Health check
   if (pathname === '/health') {
+    const vi = getVersionInfo();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'healthy',
       server: 'thai-transliterate-mcp',
-      version: '0.1.0',
+      version: vi.mcp.version,
+      commit: vi.mcp.commit,
+      lib: vi.lib,
       transport: 'streamable-http',
       activeSessions: sessions.size,
     }));
@@ -136,6 +143,7 @@ const httpServer = http.createServer(async (req, res) => {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
+      const startMs = Date.now();
       try {
         const { thai, target, maxVariants } = JSON.parse(body);
         if (!thai) {
@@ -158,6 +166,15 @@ const httpServer = http.createServer(async (req, res) => {
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
+
+        logRequest({
+          source: 'rest',
+          tool: target ? 'transliterate+match' : 'transliterate',
+          input: { thai, target, maxVariants },
+          response: { text: result.text, variantCount: result.variants.length },
+          latencyMs: Date.now() - startMs,
+          version: getVersionInfo(),
+        });
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
