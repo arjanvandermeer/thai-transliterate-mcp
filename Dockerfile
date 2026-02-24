@@ -12,6 +12,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY src ./src
+COPY web ./web
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001

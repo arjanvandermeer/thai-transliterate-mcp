@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thai Transliterate</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 0.3rem;
+    }
+    .subtitle {
+      color: #888;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 1.5rem;
+    }
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      font-size: 1.2rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus {
+      border-color: #4a90d9;
+    }
+    input[type="text"]::placeholder {
+      color: #bbb;
+    }
+    .result-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #999;
+      margin-bottom: 0.4rem;
+      margin-top: 1rem;
+    }
+    .result-text {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #222;
+      min-height: 2rem;
+    }
+    .variants-list {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .variant-tag {
+      background: #f0f4f8;
+      border: 1px solid #dde4ed;
+      border-radius: 6px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.85rem;
+      color: #555;
+    }
+    .variant-weight {
+      color: #aaa;
+      font-size: 0.75rem;
+      margin-left: 0.2rem;
+    }
+    .match-section {
+      margin-top: 1rem;
+    }
+    .match-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .match-row input {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      outline: none;
+    }
+    .match-row input:focus {
+      border-color: #4a90d9;
+    }
+    .match-result {
+      font-size: 0.9rem;
+      color: #555;
+      margin-top: 0.5rem;
+    }
+    .match-result .distance-0 { color: #2e7d32; font-weight: 600; }
+    .match-result .distance-low { color: #f57f17; font-weight: 600; }
+    .match-result .distance-high { color: #c62828; font-weight: 600; }
+    .empty { color: #ccc; font-style: italic; font-weight: normal; font-size: 1rem; }
+    footer {
+      margin-top: auto;
+      padding-top: 2rem;
+      color: #bbb;
+      font-size: 0.8rem;
+    }
+    footer a { color: #999; }
+  </style>
+</head>
+<body>
+  <h1>Thai Transliterate</h1>
+  <p class="subtitle">Multi-variant Thai-to-Roman transliteration</p>
+
+  <div class="card">
+    <div class="input-row">
+      <input type="text" id="thai-input" placeholder="Type Thai text... e.g. สุขุมวิท" autofocus>
+    </div>
+
+    <div class="result-label">Best romanization</div>
+    <div class="result-text" id="result-text"><span class="empty">Enter Thai text above</span></div>
+
+    <div class="result-label">Variants</div>
+    <ul class="variants-list" id="variants-list"></ul>
+  </div>
+
+  <div class="card match-section">
+    <div class="result-label" style="margin-top:0">Match against English</div>
+    <div class="match-row">
+      <input type="text" id="match-input" placeholder="e.g. silom">
+    </div>
+    <div class="match-result" id="match-result"></div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/arjanvandermeer/thai-transliterate-mcp">thai-transliterate-mcp</a>
+    &middot;
+    <a href="https://github.com/arjanvandermeer/thai-transliterate-js">thai-transliterate</a>
+  </footer>
+
+  <script>
+    const thaiInput = document.getElementById('thai-input');
+    const matchInput = document.getElementById('match-input');
+    const resultText = document.getElementById('result-text');
+    const variantsList = document.getElementById('variants-list');
+    const matchResult = document.getElementById('match-result');
+
+    let debounceTimer = null;
+    let lastThai = '';
+    let lastVariants = null;
+
+    thaiInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchTransliteration, 150);
+    });
+
+    matchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchTransliteration, 150);
+    });
+
+    async function fetchTransliteration() {
+      const thai = thaiInput.value.trim();
+      const target = matchInput.value.trim();
+
+      if (!thai) {
+        resultText.innerHTML = '<span class="empty">Enter Thai text above</span>';
+        variantsList.innerHTML = '';
+        matchResult.textContent = '';
+        lastThai = '';
+        lastVariants = null;
+        return;
+      }
+
+      try {
+        const body = { thai, maxVariants: 20 };
+        if (target) body.target = target;
+
+        const res = await fetch('/api/transliterate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        resultText.textContent = data.text || '(no result)';
+
+        variantsList.innerHTML = data.variants
+          .map(v => `<li class="variant-tag">${v.text}<span class="variant-weight">${v.weight.toFixed(2)}</span></li>`)
+          .join('');
+
+        if (data.match) {
+          const m = data.match;
+          const cls = m.distance === 0 ? 'distance-0' : m.distance <= 2 ? 'distance-low' : 'distance-high';
+          matchResult.innerHTML = `Best match: <span class="${cls}">"${m.variant}"</span> &mdash; distance: <span class="${cls}">${m.distance}</span>, score: ${m.score.toFixed(2)}`;
+        } else if (target) {
+          matchResult.textContent = 'No match found';
+        } else {
+          matchResult.textContent = '';
+        }
+      } catch (err) {
+        resultText.textContent = 'Error: ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>

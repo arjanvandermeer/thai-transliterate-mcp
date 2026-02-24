@@ -3,7 +3,18 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import http from 'http';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { registerTools } from './tools.js';
+import {
+  transliterate,
+  transliterateVariants,
+  transliterateWords,
+  matchThai,
+} from 'thai-transliterate';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.argv[2] ? parseInt(process.argv[2]) : 3000;
 
@@ -81,11 +92,55 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // REST API endpoint for the web UI
+  if (pathname === '/api/transliterate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { thai, target, maxVariants } = JSON.parse(body);
+        if (!thai) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing "thai" field' }));
+          return;
+        }
+        const result = {
+          text: transliterate(thai),
+          variants: transliterateVariants(thai, { maxVariants: maxVariants || 10 }),
+          words: transliterateWords(thai, { maxVariants: maxVariants || 10 }),
+        };
+        if (target) {
+          result.match = matchThai(thai, target);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Serve web UI
+  if (pathname === '/' && req.method === 'GET') {
+    const htmlPath = path.join(__dirname, '..', 'web', 'index.html');
+    try {
+      const html = fs.readFileSync(htmlPath, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(html);
+    } catch {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Web UI not found');
+    }
+    return;
+  }
+
   // 404
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({
     error: 'Not Found',
-    message: `POST to /mcp for MCP protocol, GET /health for status.`,
+    message: `GET / for web UI, POST /mcp for MCP protocol, GET /health for status.`,
   }));
 });
 
