@@ -86,33 +86,6 @@
       font-size: 0.75rem;
       margin-left: 0.2rem;
     }
-    .match-section {
-      margin-top: 1rem;
-    }
-    .match-row {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-    }
-    .match-row input {
-      flex: 1;
-      padding: 0.5rem 0.75rem;
-      font-size: 1rem;
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      outline: none;
-    }
-    .match-row input:focus {
-      border-color: #4a90d9;
-    }
-    .match-result {
-      font-size: 0.9rem;
-      color: #555;
-      margin-top: 0.5rem;
-    }
-    .match-result .distance-0 { color: #2e7d32; font-weight: 600; }
-    .match-result .distance-low { color: #f57f17; font-weight: 600; }
-    .match-result .distance-high { color: #c62828; font-weight: 600; }
     .empty { color: #ccc; font-style: italic; font-weight: normal; font-size: 1rem; }
     footer {
       margin-top: auto;
@@ -139,14 +112,6 @@
     <ul class="variants-list" id="variants-list"></ul>
   </div>
 
-  <div class="card match-section">
-    <div class="result-label" style="margin-top:0">Match against English</div>
-    <div class="match-row">
-      <input type="text" id="match-input" placeholder="e.g. silom">
-    </div>
-    <div class="match-result" id="match-result"></div>
-  </div>
-
   <footer>
     <a href="https://github.com/arjanvandermeer/thai-transliterate-mcp">thai-transliterate-mcp</a> <span id="ver-mcp"></span>
     &middot;
@@ -165,35 +130,22 @@
       .catch(() => {});
 
     const thaiInput = document.getElementById('thai-input');
-    const matchInput = document.getElementById('match-input');
     const resultText = document.getElementById('result-text');
     const variantsList = document.getElementById('variants-list');
-    const matchResult = document.getElementById('match-result');
 
     let debounceTimer = null;
-    let lastThai = '';
-    let lastVariants = null;
 
     thaiInput.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(fetchTransliteration, 150);
     });
 
-    matchInput.addEventListener('input', () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(fetchTransliteration, 150);
-    });
-
     async function fetchTransliteration() {
       const thai = thaiInput.value.trim();
-      const target = matchInput.value.trim();
 
       if (!thai) {
         resultText.innerHTML = '<span class="empty">Enter Thai text above</span>';
         variantsList.innerHTML = '';
-        matchResult.textContent = '';
-        lastThai = '';
-        lastVariants = null;
         return;
       }
 
@@ -201,18 +153,14 @@
       if (!/[\u0E01-\u0E5B]/.test(thai)) {
         resultText.innerHTML = '<span class="empty">No Thai text detected</span>';
         variantsList.innerHTML = '';
-        matchResult.textContent = '';
         return;
       }
 
       try {
-        const body = { thai, maxVariants: 20 };
-        if (target) body.target = target;
-
         const res = await fetch('/api/transliterate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ thai, maxVariants: 20 }),
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -223,16 +171,6 @@
         variantsList.innerHTML = data.variants
           .map(v => `<li class="variant-tag">${v.text}<span class="variant-weight">${v.weight.toFixed(2)}</span></li>`)
           .join('');
-
-        if (data.match) {
-          const m = data.match;
-          const cls = m.distance === 0 ? 'distance-0' : m.distance <= 2 ? 'distance-low' : 'distance-high';
-          matchResult.innerHTML = `Best match: <span class="${cls}">"${m.variant}"</span> &mdash; distance: <span class="${cls}">${m.distance}</span>, score: ${m.score.toFixed(2)}`;
-        } else if (target) {
-          matchResult.textContent = 'No match found';
-        } else {
-          matchResult.textContent = '';
-        }
       } catch (err) {
         resultText.textContent = 'Error: ' + err.message;
       }
