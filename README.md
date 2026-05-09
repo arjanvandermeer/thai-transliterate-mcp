@@ -58,9 +58,9 @@ Four tools are exposed via the [Model Context Protocol](https://modelcontextprot
 
 ## Deployment
 
-Deploys to AWS ECS Fargate via GitHub Actions on push to `main`. The deploy pipeline auto-updates the `thai-transliterate` library to its latest version.
+Deploys to an EC2 instance via GitHub Actions on push to `main`. The deploy pipeline SSHs in, pulls latest, updates the `thai-transliterate` library, and restarts the systemd service.
 
-Request logging goes to DynamoDB (`thai-transliterate-logs` table) in production, or `logs/requests.jsonl` locally.
+Request logging goes to `logs/requests.jsonl`.
 
 ## License
 
